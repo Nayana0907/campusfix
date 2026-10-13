@@ -1,0 +1,15 @@
+target/
+.mvn/
+mvnw
+mvnw.cmd
+.git/
+.gitignore
+.classpath
+.project
+.settings/
+.factorypath
+.env
+.env.local
+*.log
+uploads/
+README.md

@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. MySQL Database Service
+  # ============================================================================
+  mysql:
+    image: mysql:8.0
+    container_name: campusfix-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123@123}
+      MYSQL_DATABASE: ${DB_NAME:-campusfix}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-123@123}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - campusfix-net
+
+  # ============================================================================
+  # 2. Spring Boot Backend Service
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: campusfix-backend
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DB_URL: jdbc:mysql://mysql:3306/${DB_NAME:-campusfix}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-123@123}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-900000}
+      JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost,http://localhost:80,http://localhost:5173}
+      COMPLAINT_UPLOAD_DIR: /app/uploads/complaints
+      HIBERNATE_DDL_AUTO: update
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - campusfix-net
+
+  # ============================================================================
+  # 3. React Frontend Service (Served via Nginx)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    container_name: campusfix-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - campusfix-net
+
+# ==============================================================================
+# Persistent Volumes
+# ==============================================================================
+volumes:
+  mysql_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+# ==============================================================================
+# Isolated Network
+# ==============================================================================
+networks:
+  campusfix-net:
+    driver: bridge
