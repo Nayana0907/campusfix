@@ -60,4 +60,14 @@ logs/
 .DS_Store
 Thumbs.db
 
+# Root duplicates from pre-split structure
+/src/
+/pom.xml
+/mvnw
+/mvnw.cmd
+/HELP.md
+/.mvn/
+/.env.example
+
+
 
