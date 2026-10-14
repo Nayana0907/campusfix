@@ -32,7 +32,7 @@ RUN apk add --no-cache curl \
     && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Create directory for complaint upload attachments and configure ownership
-RUN mkdir -p /app/uploads/complaints && chown -R appuser:appgroup /app
+RUN mkdir -p /app/uploads/complaints && chown -R appuser:appgroup /app && chmod -R 775 /app/uploads
 
 # Copy built artifact from builder stage
 COPY --from=builder /build/target/*.jar /app/app.jar
@@ -44,14 +44,14 @@ USER appuser
 # Expose Spring Boot server port
 EXPOSE 8080
 
-# Environment variable defaults (overridden by docker-compose or Kubernetes)
+# Environment variable defaults (optimized for cloud/container deployment)
 ENV PORT=8080 \
     SPRING_PROFILES_ACTIVE=prod \
-    JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+    JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xss512k -Djava.security.egd=file:/dev/./urandom"
 
-# Container healthcheck via backend actuator/health endpoint
+# Container healthcheck via backend actuator/health endpoint using dynamic PORT
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:8080/api/health || exit 1
+  CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
 
 # Run the Spring Boot application
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
