@@ -1,9 +1,31 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+/**
+ * Normalizes and cleans the API base URL from Vite environment variables.
+ * - Strips any trailing slashes
+ * - Strips redundant trailing '/api' to prevent duplicate '/api/api' paths
+ * - Defaults to http://localhost:8080 in development mode
+ * - Defaults to empty string (relative paths) in production mode if unset
+ */
+export function getCleanBaseUrl() {
+  const raw = import.meta.env.VITE_API_BASE_URL;
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    let cleaned = raw.trim().replace(/\/+$/, '');
+    if (cleaned.endsWith('/api')) {
+      cleaned = cleaned.slice(0, -4);
+    }
+    return cleaned;
+  }
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8080';
+  }
+  return '';
+}
+
+const baseURL = getCleanBaseUrl();
 
 const api = axios.create({
-  baseURL,
+  baseURL: baseURL || undefined,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
@@ -27,13 +49,19 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
-// Request Interceptor: Attach JWT Bearer token if present
+// Request Interceptor: Attach JWT Bearer token if present & strip manual Content-Type for FormData
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('campusfix_token');
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // When transmitting FormData, let the browser or axios compute the boundary automatically
+    if (config.data instanceof FormData && config.headers && config.headers['Content-Type']) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -47,7 +75,10 @@ api.interceptors.response.use(
 
     if (!error.response) {
       // Network error or backend unreachable
-      const networkError = new Error('Unable to connect to CampusFix server. Please check your network or server status.');
+      const base = getCleanBaseUrl();
+      const networkError = new Error(
+        `Unable to connect to CampusFix server${base ? ` at ${base}` : ''}. Please check your network or server status.`
+      );
       networkError.status = 0;
       networkError.errorCode = 'NETWORK_ERROR';
       return Promise.reject(networkError);
@@ -94,8 +125,10 @@ api.interceptors.response.use(
         const refreshPayload = storedRefreshToken ? { refreshToken: storedRefreshToken } : {};
 
         // Use direct axios call (independent of instance interceptors) to prevent infinite loops
+        const refreshBase = getCleanBaseUrl();
+        const refreshUrl = refreshBase ? `${refreshBase}/api/auth/refresh` : '/api/auth/refresh';
         const refreshResponse = await axios.post(
-          `${baseURL}/api/auth/refresh`,
+          refreshUrl,
           refreshPayload,
           {
             withCredentials: true,

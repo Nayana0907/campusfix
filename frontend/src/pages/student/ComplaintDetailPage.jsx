@@ -25,18 +25,26 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { CardSkeleton } from '../../components/common/Skeleton';
 import { formatDate } from '../../utils/constants';
+import { getCleanBaseUrl } from '../../api/axios';
 
-const resolveImageUrl = (path) => {
+export const resolveImageUrl = (path, token = null) => {
   if (!path) return '';
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-  return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+  let fullUrl = path;
+  if (!path.startsWith('http://') && !path.startsWith('https://')) {
+    const baseUrl = getCleanBaseUrl();
+    fullUrl = `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+  }
+  if (token) {
+    const separator = fullUrl.includes('?') ? '&' : '?';
+    fullUrl = `${fullUrl}${separator}token=${encodeURIComponent(token)}`;
+  }
+  return fullUrl;
 };
 
 export const ComplaintDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, role } = useAuth();
+  const { user, role, token } = useAuth();
   const { addToast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -655,7 +663,7 @@ export const ComplaintDetailPage = () => {
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
                     {complaint.images.map((img) => {
-                      const imgUrl = resolveImageUrl(img.url);
+                      const imgUrl = resolveImageUrl(img.url, token);
                       return (
                         <div
                           key={img.id}
@@ -699,10 +707,10 @@ export const ComplaintDetailPage = () => {
                       border: '2px solid var(--color-success)',
                       cursor: 'pointer',
                     }}
-                    onClick={() => setPreviewImage(resolveImageUrl(complaint.afterImageUrl))}
+                    onClick={() => setPreviewImage(resolveImageUrl(complaint.afterImageUrl, token))}
                   >
                     <img
-                      src={resolveImageUrl(complaint.afterImageUrl)}
+                      src={resolveImageUrl(complaint.afterImageUrl, token)}
                       alt="After repair evidence"
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={(e) => {

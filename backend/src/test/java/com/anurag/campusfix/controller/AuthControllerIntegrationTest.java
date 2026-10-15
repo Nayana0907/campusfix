@@ -364,4 +364,49 @@ class AuthControllerIntegrationTest {
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
                 .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
     }
+
+    @Test
+    @DisplayName("CORS preflight request from production Vercel origin with headers should be permitted")
+    void testCorsPreflightProductionOriginWithHeaders() throws Exception {
+        mockMvc.perform(options("/api/auth/login")
+                        .header("Origin", "https://campusfix-phi.vercel.app")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "authorization,content-type,cache-control"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://campusfix-phi.vercel.app"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
+    @DisplayName("GET /api/auth/me should authenticate via query parameter token")
+    void testAuthenticateViaQueryParamToken() throws Exception {
+        UserEntity student = new UserEntity();
+        student.setName("Query Param User");
+        student.setEmail("querytoken@campus.edu");
+        student.setPassword(passwordEncoder.encode("TestPassword123"));
+        student.setRole(Role.STUDENT);
+        student.setIsActive(true);
+        userRepository.save(student);
+
+        String token = jwtService.generateToken(student.getEmail(), student.getRole().name());
+
+        mockMvc.perform(get("/api/auth/me").param("token", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("querytoken@campus.edu"))
+                .andExpect(jsonPath("$.name").value("Query Param User"));
+    }
+
+    @Test
+    @DisplayName("maskUrlCredentials should properly redact passwords in JDBC and URI formats")
+    void testMaskUrlCredentials() {
+        String uriUrl = "mysql://admin:secretPass123@gateway.tidbcloud.com:4000/campusfix";
+        String maskedUri = com.anurag.campusfix.CampusFixBackendApplication.maskUrlCredentials(uriUrl);
+        org.junit.jupiter.api.Assertions.assertFalse(maskedUri.contains("secretPass123"));
+        org.junit.jupiter.api.Assertions.assertTrue(maskedUri.contains("***"));
+
+        String jdbcUrl = "jdbc:mysql://host:3306/db?user=root&password=mySecretPassword&sslMode=true";
+        String maskedJdbc = com.anurag.campusfix.CampusFixBackendApplication.maskUrlCredentials(jdbcUrl);
+        org.junit.jupiter.api.Assertions.assertFalse(maskedJdbc.contains("mySecretPassword"));
+        org.junit.jupiter.api.Assertions.assertTrue(maskedJdbc.contains("password=***"));
+    }
 }

@@ -30,12 +30,16 @@ public class AuthController {
 
     private final UserService userService;
     private final boolean cookieSecure;
+    private final String cookieSameSite;
 
     public AuthController(
             UserService userService,
-            @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie.secure:false}") boolean cookieSecure) {
+            @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie.secure:false}") boolean cookieSecure,
+            @org.springframework.beans.factory.annotation.Value("${app.jwt.cookie.same-site:Lax}") String cookieSameSite) {
         this.userService = userService;
         this.cookieSecure = cookieSecure;
+        this.cookieSameSite = (cookieSecure && (cookieSameSite == null || "Lax".equalsIgnoreCase(cookieSameSite)))
+                ? "None" : (cookieSameSite != null ? cookieSameSite : "Lax");
     }
 
     /**
@@ -59,7 +63,7 @@ public class AuthController {
                 .secure(cookieSecure)
                 .path("/api/auth")
                 .maxAge(7 * 24 * 60 * 60)
-                .sameSite("Lax")
+                .sameSite(cookieSameSite)
                 .build();
 
         return ResponseEntity.ok()
@@ -104,7 +108,7 @@ public class AuthController {
                 .secure(cookieSecure)
                 .path("/api/auth")
                 .maxAge(7 * 24 * 60 * 60)
-                .sameSite("Lax")
+                .sameSite(cookieSameSite)
                 .build();
 
         return ResponseEntity.ok()
@@ -135,7 +139,7 @@ public class AuthController {
                 .secure(cookieSecure)
                 .path("/api/auth")
                 .maxAge(0)
-                .sameSite("Lax")
+                .sameSite(cookieSameSite)
                 .build();
 
         return ResponseEntity.ok()

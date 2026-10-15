@@ -107,3 +107,48 @@ CREATE TABLE IF NOT EXISTS complaint_images (
     INDEX idx_image_complaint (complaint_id),
     INDEX idx_image_storage_key (storage_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(512) NOT NULL,
+    user_id BIGINT NOT NULL,
+    expiry_date DATETIME NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT uq_refresh_token UNIQUE (token),
+    CONSTRAINT fk_refresh_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_refresh_token (token),
+    INDEX idx_refresh_token_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    recipient_id BIGINT NOT NULL,
+    complaint_id BIGINT NULL,
+    reference_number VARCHAR(64) NULL,
+    event_type VARCHAR(64) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    message VARCHAR(2000) NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT fk_notification_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_notification_recipient (recipient_id),
+    INDEX idx_notification_unread (recipient_id, is_read),
+    INDEX idx_notification_complaint (complaint_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS complaint_feedback (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    complaint_id BIGINT NOT NULL,
+    student_id BIGINT NOT NULL,
+    staff_id BIGINT NULL,
+    rating INT NOT NULL,
+    comment VARCHAR(2000) NULL,
+    created_at DATETIME NOT NULL,
+    CONSTRAINT uq_feedback_complaint UNIQUE (complaint_id),
+    CONSTRAINT fk_feedback_complaint FOREIGN KEY (complaint_id) REFERENCES complaints(id) ON DELETE CASCADE,
+    CONSTRAINT fk_feedback_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_feedback_staff FOREIGN KEY (staff_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_feedback_complaint (complaint_id),
+    INDEX idx_feedback_staff (staff_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

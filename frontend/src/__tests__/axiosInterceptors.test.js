@@ -77,4 +77,20 @@ describe('Axios Client & Interceptors', () => {
       'Unable to connect to CampusFix server'
     );
   });
+
+  it('removes Content-Type header when request data is FormData so browser sets multipart boundary', () => {
+    const requestInterceptor = api.interceptors.request.handlers[0];
+    const formData = new FormData();
+    formData.append('key', 'value');
+
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      data: formData,
+    };
+
+    const modifiedConfig = requestInterceptor.fulfilled(config);
+    expect(modifiedConfig.headers['Content-Type']).toBeUndefined();
+  });
 });

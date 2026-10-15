@@ -18,33 +18,87 @@ public class CampusFixBackendApplication {
 		SpringApplication.run(CampusFixBackendApplication.class, args);
 	}
 
+	public static String maskUrlCredentials(String url) {
+		if (url == null) return "";
+		return url.replaceAll("://([^:]+):([^@]+)@", "://$1:***@")
+		          .replaceAll("(?i)(password=)[^;&]*", "$1***");
+	}
+
 	private static void validateEnvironment() {
 		String profile = System.getenv("SPRING_PROFILES_ACTIVE");
 		if (profile == null || profile.isBlank()) {
 			profile = System.getProperty("spring.profiles.active", "default");
 		}
-		if (profile.contains("prod")) {
-			String dbUrl = System.getenv("DB_URL");
-			if (dbUrl == null || dbUrl.isBlank()) {
-				dbUrl = System.getProperty("DB_URL");
+
+		// Handle cloud providers that inject DATABASE_URL (e.g. Render / Railway)
+		String rawDbUrl = System.getenv("DATABASE_URL");
+		if (rawDbUrl == null || rawDbUrl.isBlank()) {
+			rawDbUrl = System.getenv("DB_URL");
+		}
+		if (rawDbUrl == null || rawDbUrl.isBlank()) {
+			rawDbUrl = System.getProperty("DATABASE_URL");
+		}
+		if (rawDbUrl == null || rawDbUrl.isBlank()) {
+			rawDbUrl = System.getProperty("DB_URL");
+		}
+
+		if (rawDbUrl != null && rawDbUrl.startsWith("mysql://")) {
+			try {
+				java.net.URI uri = java.net.URI.create(rawDbUrl);
+				String userInfo = uri.getUserInfo();
+				if (userInfo != null && userInfo.contains(":")) {
+					String[] parts = userInfo.split(":", 2);
+					if (System.getProperty("spring.datasource.username") == null && System.getenv("DB_USERNAME") == null) {
+						System.setProperty("spring.datasource.username", parts[0]);
+					}
+					if (System.getProperty("spring.datasource.password") == null && System.getenv("DB_PASSWORD") == null) {
+						System.setProperty("spring.datasource.password", parts[1]);
+					}
+				}
+				int port = uri.getPort() > 0 ? uri.getPort() : 3306;
+				String path = uri.getPath() != null ? uri.getPath() : "/campusfix";
+				String query = uri.getQuery() != null ? "?" + uri.getQuery() : "";
+				String convertedJdbc = "jdbc:mysql://" + uri.getHost() + ":" + port + path + query;
+				System.setProperty("spring.datasource.url", convertedJdbc);
+				rawDbUrl = convertedJdbc;
+			} catch (Exception ex) {
+				System.err.println("CAMPUSFIX: Failed to parse DATABASE_URL URI: " + ex.getMessage());
 			}
-			if (dbUrl == null || dbUrl.isBlank() || dbUrl.equals("${DB_URL}")) {
+		}
+
+		if (profile.contains("prod")) {
+			String dbUrl = rawDbUrl;
+			if (dbUrl == null || dbUrl.isBlank() || dbUrl.equals("${DB_URL}") || dbUrl.equals("${DATABASE_URL}")) {
 				System.err.println("================================================================================");
 				System.err.println("CAMPUSFIX STARTUP CONFIGURATION ERROR:");
-				System.err.println("The 'DB_URL' environment variable is NOT configured for production ('prod' profile)!");
-				System.err.println("To fix this, go to your Render Dashboard -> Service -> Environment and add:");
-				System.err.println("  1. DB_URL (e.g. jdbc:mysql://<host>:4000/campusfix?sslMode=VERIFY_IDENTITY)");
-				System.err.println("  2. DB_USERNAME (e.g. <prefix>.root)");
-				System.err.println("  3. DB_PASSWORD (your database password)");
-				System.err.println("  4. JWT_SECRET (256-bit secret key)");
+				System.err.println("Neither 'DB_URL' nor 'DATABASE_URL' is configured for production ('prod' profile)!");
+				System.err.println("To fix this, go to your hosting dashboard (e.g. Render) -> Environment and configure:");
+				System.err.println("  1. DB_URL or DATABASE_URL (e.g. jdbc:mysql://<host>:4000/campusfix?sslMode=VERIFY_IDENTITY)");
+				System.err.println("  2. DB_USERNAME");
+				System.err.println("  3. DB_PASSWORD");
+				System.err.println("  4. JWT_SECRET (strong 256-bit key)");
 				System.err.println("================================================================================");
 				System.err.flush();
 			} else if (dbUrl.contains("localhost") || dbUrl.contains("127.0.0.1")) {
 				System.err.println("================================================================================");
-				System.err.println("CAMPUSFIX STARTUP WARNING: 'DB_URL' points to 'localhost' / '127.0.0.1'!");
-				System.err.println("Current DB_URL: " + dbUrl);
-				System.err.println("In Render cloud containers, MySQL does not run locally on 127.0.0.1.");
-				System.err.println("Please provide a cloud database connection string (e.g. TiDB Cloud Serverless or Aiven).");
+				System.err.println("CAMPUSFIX STARTUP WARNING: Database URL points to 'localhost' / '127.0.0.1' in production!");
+				System.err.println("Configured Database URL: " + maskUrlCredentials(dbUrl));
+				System.err.println("In cloud containers, MySQL does not run locally on 127.0.0.1.");
+				System.err.println("Please provide a cloud MySQL connection (e.g. TiDB Cloud, Aiven, or AWS RDS).");
+				System.err.println("================================================================================");
+				System.err.flush();
+			} else {
+				System.out.println("CAMPUSFIX: Production database target: " + maskUrlCredentials(dbUrl));
+			}
+
+			String jwtSecret = System.getenv("JWT_SECRET");
+			if (jwtSecret == null || jwtSecret.isBlank()) {
+				jwtSecret = System.getProperty("JWT_SECRET");
+			}
+			if (jwtSecret == null || jwtSecret.isBlank() || "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970".equals(jwtSecret)) {
+				System.err.println("================================================================================");
+				System.err.println("CAMPUSFIX SECURITY WARNING: Production is using an unconfigured or default JWT_SECRET!");
+				System.err.println("Please configure a strong, unique 256-bit key via the JWT_SECRET environment variable.");
 				System.err.println("================================================================================");
 				System.err.flush();
 			}
