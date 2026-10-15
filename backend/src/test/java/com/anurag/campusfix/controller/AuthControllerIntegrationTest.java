@@ -378,6 +378,18 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("CORS preflight request from dynamic Vercel preview origin should be permitted")
+    void testCorsPreflightDynamicVercelPreviewOrigin() throws Exception {
+        mockMvc.perform(options("/api/auth/register")
+                        .header("Origin", "https://campusfix-p05ufs946-nayana22.vercel.app")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "authorization,content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://campusfix-p05ufs946-nayana22.vercel.app"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
     @DisplayName("GET /api/auth/me should authenticate via query parameter token")
     void testAuthenticateViaQueryParamToken() throws Exception {
         UserEntity student = new UserEntity();

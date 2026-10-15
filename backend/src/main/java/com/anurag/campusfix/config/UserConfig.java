@@ -87,7 +87,18 @@ public class UserConfig {
             origins = List.of("http://localhost:3000", "http://localhost:5173");
         }
 
-        configuration.setAllowedOrigins(origins);
+        List<String> originPatterns = new java.util.ArrayList<>(origins);
+        if (!originPatterns.contains("https://*.vercel.app")) {
+            originPatterns.add("https://*.vercel.app");
+        }
+        if (!originPatterns.contains("http://localhost:[*]")) {
+            originPatterns.add("http://localhost:[*]");
+        }
+        if (!originPatterns.contains("https://localhost:[*]")) {
+            originPatterns.add("https://localhost:[*]");
+        }
+
+        configuration.setAllowedOriginPatterns(originPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(List.of(
                 "Authorization",
