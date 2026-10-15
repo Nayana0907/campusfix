@@ -261,12 +261,50 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataAccessException(org.springframework.dao.DataAccessException ex) {
+        log.error("Database access error: {}", ex.getMessage(), ex);
+        Throwable root = ex;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String rootMsg = root.getMessage() != null ? root.getMessage() : ex.getMessage();
+        Map<String, String> errors = new HashMap<>();
+        errors.put("exception", ex.getClass().getSimpleName());
+        if (rootMsg != null) {
+            errors.put("rootCause", rootMsg);
+        }
+
+        ApiErrorResponse response = new ApiErrorResponse(
+                "Database error: " + (rootMsg != null ? rootMsg : "Operation failed due to database error"),
+                "DATABASE_ERROR",
+                errors
+        );
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGenericException(Exception ex) {
-        log.error("Unhandled internal server error", ex);
+        log.error("Unhandled internal server error: {}", ex.getMessage(), ex);
+        Throwable root = ex;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String rootMsg = root.getMessage() != null ? root.getMessage() : ex.getMessage();
+        Map<String, String> errors = new HashMap<>();
+        errors.put("exception", ex.getClass().getSimpleName());
+        if (rootMsg != null) {
+            errors.put("rootCause", rootMsg);
+        }
+
+        String userMessage = (rootMsg != null && !rootMsg.isBlank())
+                ? "An unexpected internal error occurred: " + rootMsg
+                : "An unexpected internal error occurred";
+
         ApiErrorResponse response = new ApiErrorResponse(
-                "An unexpected internal error occurred",
-                "INTERNAL_SERVER_ERROR"
+                userMessage,
+                "INTERNAL_SERVER_ERROR",
+                errors
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }

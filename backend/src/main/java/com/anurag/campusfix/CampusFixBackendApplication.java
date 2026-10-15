@@ -30,16 +30,21 @@ public class CampusFixBackendApplication {
 			profile = System.getProperty("spring.profiles.active", "default");
 		}
 
-		// Handle cloud providers that inject DATABASE_URL (e.g. Render / Railway)
 		String rawDbUrl = System.getenv("DATABASE_URL");
 		if (rawDbUrl == null || rawDbUrl.isBlank()) {
 			rawDbUrl = System.getenv("DB_URL");
+		}
+		if (rawDbUrl == null || rawDbUrl.isBlank()) {
+			rawDbUrl = System.getenv("SPRING_DATASOURCE_URL");
 		}
 		if (rawDbUrl == null || rawDbUrl.isBlank()) {
 			rawDbUrl = System.getProperty("DATABASE_URL");
 		}
 		if (rawDbUrl == null || rawDbUrl.isBlank()) {
 			rawDbUrl = System.getProperty("DB_URL");
+		}
+		if (rawDbUrl == null || rawDbUrl.isBlank()) {
+			rawDbUrl = System.getProperty("spring.datasource.url");
 		}
 
 		if (rawDbUrl != null && rawDbUrl.startsWith("mysql://")) {
@@ -56,14 +61,69 @@ public class CampusFixBackendApplication {
 					}
 				}
 				int port = uri.getPort() > 0 ? uri.getPort() : 3306;
-				String path = uri.getPath() != null ? uri.getPath() : "/campusfix";
-				String query = uri.getQuery() != null ? "?" + uri.getQuery() : "";
-				String convertedJdbc = "jdbc:mysql://" + uri.getHost() + ":" + port + path + query;
+				String path = uri.getPath();
+				if (path == null || path.isBlank() || path.equals("/")) {
+					path = "/campusfix";
+				}
+				String query = uri.getQuery() != null && !uri.getQuery().isBlank() ? uri.getQuery() : "";
+				if (!query.contains("createDatabaseIfNotExist")) {
+					query += (query.isEmpty() ? "" : "&") + "createDatabaseIfNotExist=true";
+				}
+				if (!query.contains("allowPublicKeyRetrieval")) {
+					query += (query.isEmpty() ? "" : "&") + "allowPublicKeyRetrieval=true";
+				}
+				if (!query.contains("useSSL=") && !query.contains("sslMode=")) {
+					query += (query.isEmpty() ? "" : "&") + "useSSL=true";
+				}
+				String queryString = query.isEmpty() ? "" : "?" + query;
+				String convertedJdbc = "jdbc:mysql://" + uri.getHost() + ":" + port + path + queryString;
 				System.setProperty("spring.datasource.url", convertedJdbc);
 				rawDbUrl = convertedJdbc;
 			} catch (Exception ex) {
 				System.err.println("CAMPUSFIX: Failed to parse DATABASE_URL URI: " + ex.getMessage());
 			}
+		} else if (rawDbUrl != null && rawDbUrl.startsWith("jdbc:mysql://")) {
+			try {
+				String adjustedUrl = rawDbUrl;
+				int schemaStart = adjustedUrl.indexOf("://");
+				if (schemaStart != -1) {
+					int hostStart = schemaStart + 3;
+					int queryStart = adjustedUrl.indexOf('?', hostStart);
+					String hostAndPath = queryStart != -1 ? adjustedUrl.substring(hostStart, queryStart) : adjustedUrl.substring(hostStart);
+					int slashIdx = hostAndPath.indexOf('/');
+					if (slashIdx == -1 || slashIdx == hostAndPath.length() - 1) {
+						String hostOnly = slashIdx == -1 ? hostAndPath : hostAndPath.substring(0, slashIdx);
+						String queryPart = queryStart != -1 ? adjustedUrl.substring(queryStart) : "";
+						adjustedUrl = adjustedUrl.substring(0, hostStart) + hostOnly + "/campusfix" + queryPart;
+					}
+				}
+				if (!adjustedUrl.contains("createDatabaseIfNotExist")) {
+					adjustedUrl += (adjustedUrl.contains("?") ? "&" : "?") + "createDatabaseIfNotExist=true";
+				}
+				if (!adjustedUrl.contains("allowPublicKeyRetrieval")) {
+					adjustedUrl += (adjustedUrl.contains("?") ? "&" : "?") + "allowPublicKeyRetrieval=true";
+				}
+				System.setProperty("spring.datasource.url", adjustedUrl);
+				rawDbUrl = adjustedUrl;
+			} catch (Exception ex) {
+				System.err.println("CAMPUSFIX: Failed to adjust JDBC URL: " + ex.getMessage());
+			}
+		}
+
+		String dbUser = System.getenv("DB_USERNAME");
+		if (dbUser == null || dbUser.isBlank()) {
+			dbUser = System.getenv("DATABASE_USERNAME");
+		}
+		if (dbUser != null && !dbUser.isBlank()) {
+			System.setProperty("spring.datasource.username", dbUser);
+		}
+
+		String dbPass = System.getenv("DB_PASSWORD");
+		if (dbPass == null || dbPass.isBlank()) {
+			dbPass = System.getenv("DATABASE_PASSWORD");
+		}
+		if (dbPass != null && !dbPass.isBlank()) {
+			System.setProperty("spring.datasource.password", dbPass);
 		}
 
 		if (profile.contains("prod")) {

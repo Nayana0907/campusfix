@@ -10,6 +10,10 @@ public class HealthResponse {
     private String service = "campusfix-backend";
     private String status;
     private String database;
+    private String catalog;
+    private String tables;
+    private Long userCount;
+    private String error;
     private LocalDateTime timestamp = LocalDateTime.now();
 
     public HealthResponse() {
@@ -53,6 +57,38 @@ public class HealthResponse {
 
     public void setDatabase(String database) {
         this.database = database;
+    }
+
+    public String getCatalog() {
+        return catalog;
+    }
+
+    public void setCatalog(String catalog) {
+        this.catalog = catalog;
+    }
+
+    public String getTables() {
+        return tables;
+    }
+
+    public void setTables(String tables) {
+        this.tables = tables;
+    }
+
+    public Long getUserCount() {
+        return userCount;
+    }
+
+    public void setUserCount(Long userCount) {
+        this.userCount = userCount;
+    }
+
+    public String getError() {
+        return error;
+    }
+
+    public void setError(String error) {
+        this.error = error;
     }
 
     public LocalDateTime getTimestamp() {
