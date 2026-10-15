@@ -24,6 +24,82 @@ public class CampusFixBackendApplication {
 		          .replaceAll("(?i)(password=)[^;&]*", "$1***");
 	}
 
+	public static String normalizeDatabaseUrl(String rawUrl) {
+		if (rawUrl == null || rawUrl.isBlank()) {
+			return rawUrl;
+		}
+
+		String url = rawUrl.trim();
+
+		// Convert cloud mysql:// URI to jdbc:mysql://
+		if (url.startsWith("mysql://")) {
+			try {
+				java.net.URI uri = java.net.URI.create(url);
+				String userInfo = uri.getUserInfo();
+				if (userInfo != null && userInfo.contains(":")) {
+					String[] parts = userInfo.split(":", 2);
+					if (System.getProperty("spring.datasource.username") == null && System.getenv("DB_USERNAME") == null) {
+						System.setProperty("spring.datasource.username", parts[0]);
+					}
+					if (System.getProperty("spring.datasource.password") == null && System.getenv("DB_PASSWORD") == null) {
+						System.setProperty("spring.datasource.password", parts[1]);
+					}
+				}
+				int port = uri.getPort() > 0 ? uri.getPort() : 3306;
+				String path = uri.getPath();
+				if (path == null || path.isBlank() || path.equals("/") || "/sys".equalsIgnoreCase(path) || "/mysql".equalsIgnoreCase(path)) {
+					path = "/campusfix";
+				}
+				String query = uri.getQuery() != null && !uri.getQuery().isBlank() ? uri.getQuery() : "";
+				url = "jdbc:mysql://" + uri.getHost() + ":" + port + path + (query.isEmpty() ? "" : "?" + query);
+			} catch (Exception ex) {
+				System.err.println("CAMPUSFIX: Failed to parse mysql:// URL: " + ex.getMessage());
+			}
+		}
+
+		// Ensure jdbc:mysql:// URL has a valid application database name and necessary parameters
+		if (url.startsWith("jdbc:mysql://")) {
+			try {
+				int schemeIdx = url.indexOf("://");
+				int queryIdx = url.indexOf('?');
+				String hostAndPath = queryIdx != -1 ? url.substring(schemeIdx + 3, queryIdx) : url.substring(schemeIdx + 3);
+				String query = queryIdx != -1 ? url.substring(queryIdx + 1) : "";
+
+				int slashIdx = hostAndPath.indexOf('/');
+				String hostPort;
+				String dbName;
+				if (slashIdx == -1) {
+					hostPort = hostAndPath;
+					dbName = "campusfix";
+				} else {
+					hostPort = hostAndPath.substring(0, slashIdx);
+					String rawDb = hostAndPath.substring(slashIdx + 1).trim();
+					if (rawDb.isEmpty() || "sys".equalsIgnoreCase(rawDb) || "mysql".equalsIgnoreCase(rawDb) || "information_schema".equalsIgnoreCase(rawDb)) {
+						dbName = "campusfix";
+					} else {
+						dbName = rawDb;
+					}
+				}
+
+				if (!query.contains("createDatabaseIfNotExist")) {
+					query += (query.isEmpty() ? "" : "&") + "createDatabaseIfNotExist=true";
+				}
+				if (!query.contains("allowPublicKeyRetrieval")) {
+					query += (query.isEmpty() ? "" : "&") + "allowPublicKeyRetrieval=true";
+				}
+				if (!query.contains("useSSL=") && !query.contains("sslMode=")) {
+					query += (query.isEmpty() ? "" : "&") + "useSSL=true";
+				}
+
+				url = "jdbc:mysql://" + hostPort + "/" + dbName + (query.isEmpty() ? "" : "?" + query);
+			} catch (Exception ex) {
+				System.err.println("CAMPUSFIX: Failed to normalize JDBC URL: " + ex.getMessage());
+			}
+		}
+
+		return url;
+	}
+
 	private static void validateEnvironment() {
 		String profile = System.getenv("SPRING_PROFILES_ACTIVE");
 		if (profile == null || profile.isBlank()) {
@@ -47,67 +123,13 @@ public class CampusFixBackendApplication {
 			rawDbUrl = System.getProperty("spring.datasource.url");
 		}
 
-		if (rawDbUrl != null && rawDbUrl.startsWith("mysql://")) {
-			try {
-				java.net.URI uri = java.net.URI.create(rawDbUrl);
-				String userInfo = uri.getUserInfo();
-				if (userInfo != null && userInfo.contains(":")) {
-					String[] parts = userInfo.split(":", 2);
-					if (System.getProperty("spring.datasource.username") == null && System.getenv("DB_USERNAME") == null) {
-						System.setProperty("spring.datasource.username", parts[0]);
-					}
-					if (System.getProperty("spring.datasource.password") == null && System.getenv("DB_PASSWORD") == null) {
-						System.setProperty("spring.datasource.password", parts[1]);
-					}
-				}
-				int port = uri.getPort() > 0 ? uri.getPort() : 3306;
-				String path = uri.getPath();
-				if (path == null || path.isBlank() || path.equals("/")) {
-					path = "/campusfix";
-				}
-				String query = uri.getQuery() != null && !uri.getQuery().isBlank() ? uri.getQuery() : "";
-				if (!query.contains("createDatabaseIfNotExist")) {
-					query += (query.isEmpty() ? "" : "&") + "createDatabaseIfNotExist=true";
-				}
-				if (!query.contains("allowPublicKeyRetrieval")) {
-					query += (query.isEmpty() ? "" : "&") + "allowPublicKeyRetrieval=true";
-				}
-				if (!query.contains("useSSL=") && !query.contains("sslMode=")) {
-					query += (query.isEmpty() ? "" : "&") + "useSSL=true";
-				}
-				String queryString = query.isEmpty() ? "" : "?" + query;
-				String convertedJdbc = "jdbc:mysql://" + uri.getHost() + ":" + port + path + queryString;
-				System.setProperty("spring.datasource.url", convertedJdbc);
-				rawDbUrl = convertedJdbc;
-			} catch (Exception ex) {
-				System.err.println("CAMPUSFIX: Failed to parse DATABASE_URL URI: " + ex.getMessage());
-			}
-		} else if (rawDbUrl != null && rawDbUrl.startsWith("jdbc:mysql://")) {
-			try {
-				String adjustedUrl = rawDbUrl;
-				int schemaStart = adjustedUrl.indexOf("://");
-				if (schemaStart != -1) {
-					int hostStart = schemaStart + 3;
-					int queryStart = adjustedUrl.indexOf('?', hostStart);
-					String hostAndPath = queryStart != -1 ? adjustedUrl.substring(hostStart, queryStart) : adjustedUrl.substring(hostStart);
-					int slashIdx = hostAndPath.indexOf('/');
-					if (slashIdx == -1 || slashIdx == hostAndPath.length() - 1) {
-						String hostOnly = slashIdx == -1 ? hostAndPath : hostAndPath.substring(0, slashIdx);
-						String queryPart = queryStart != -1 ? adjustedUrl.substring(queryStart) : "";
-						adjustedUrl = adjustedUrl.substring(0, hostStart) + hostOnly + "/campusfix" + queryPart;
-					}
-				}
-				if (!adjustedUrl.contains("createDatabaseIfNotExist")) {
-					adjustedUrl += (adjustedUrl.contains("?") ? "&" : "?") + "createDatabaseIfNotExist=true";
-				}
-				if (!adjustedUrl.contains("allowPublicKeyRetrieval")) {
-					adjustedUrl += (adjustedUrl.contains("?") ? "&" : "?") + "allowPublicKeyRetrieval=true";
-				}
-				System.setProperty("spring.datasource.url", adjustedUrl);
-				rawDbUrl = adjustedUrl;
-			} catch (Exception ex) {
-				System.err.println("CAMPUSFIX: Failed to adjust JDBC URL: " + ex.getMessage());
-			}
+		String adjustedUrl = normalizeDatabaseUrl(rawDbUrl);
+		if (adjustedUrl != null && !adjustedUrl.isBlank()) {
+			System.setProperty("spring.datasource.url", adjustedUrl);
+			System.setProperty("DB_URL", adjustedUrl);
+			System.setProperty("DATABASE_URL", adjustedUrl);
+			System.setProperty("SPRING_DATASOURCE_URL", adjustedUrl);
+			rawDbUrl = adjustedUrl;
 		}
 
 		String dbUser = System.getenv("DB_USERNAME");

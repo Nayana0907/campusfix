@@ -1,6 +1,7 @@
 package com.anurag.campusfix.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -11,6 +12,8 @@ public class HealthResponse {
     private String status;
     private String database;
     private String catalog;
+    private String jdbcUrl;
+    private List<String> availableDatabases;
     private String tables;
     private Long userCount;
     private String error;
@@ -65,6 +68,22 @@ public class HealthResponse {
 
     public void setCatalog(String catalog) {
         this.catalog = catalog;
+    }
+
+    public String getJdbcUrl() {
+        return jdbcUrl;
+    }
+
+    public void setJdbcUrl(String jdbcUrl) {
+        this.jdbcUrl = jdbcUrl;
+    }
+
+    public List<String> getAvailableDatabases() {
+        return availableDatabases;
+    }
+
+    public void setAvailableDatabases(List<String> availableDatabases) {
+        this.availableDatabases = availableDatabases;
     }
 
     public String getTables() {

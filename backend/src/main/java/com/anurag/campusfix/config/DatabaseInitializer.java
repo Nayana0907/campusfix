@@ -38,15 +38,27 @@ public class DatabaseInitializer implements ApplicationRunner {
             String dbProduct = metaData.getDatabaseProductName();
             log.info("CAMPUSFIX DB INIT: Connected to {} database. Current catalog/database: {}", dbProduct, catalog);
 
+            if ("sys".equalsIgnoreCase(catalog) || "mysql".equalsIgnoreCase(catalog) || "information_schema".equalsIgnoreCase(catalog) || catalog == null || catalog.isBlank()) {
+                try (Statement stmt = conn.createStatement()) {
+                    stmt.execute("CREATE DATABASE IF NOT EXISTS campusfix;");
+                    stmt.execute("USE campusfix;");
+                    conn.setCatalog("campusfix");
+                    catalog = conn.getCatalog();
+                    log.info("CAMPUSFIX DB INIT: Switched catalog to '{}'", catalog);
+                } catch (Exception switchEx) {
+                    log.warn("CAMPUSFIX DB INIT: Notice while switching catalog to campusfix: {}", switchEx.getMessage());
+                }
+            }
+
             boolean usersTableExists = checkTableExists(conn, "users");
             if (!usersTableExists) {
                 log.warn("CAMPUSFIX DB INIT: Table 'users' not found in database '{}'. Executing schema.sql to initialize all tables...", catalog);
                 executeSchemaSql(conn);
                 boolean verified = checkTableExists(conn, "users");
                 if (verified) {
-                    log.info("CAMPUSFIX DB INIT: Database tables successfully created from schema.sql!");
+                    log.info("CAMPUSFIX DB INIT: Database tables successfully created from schema.sql in database '{}'!", catalog);
                 } else {
-                    log.error("CAMPUSFIX DB INIT: Table 'users' still not found after executing schema.sql. Please verify database user privileges.");
+                    log.error("CAMPUSFIX DB INIT: Table 'users' still not found after executing schema.sql in '{}'. Please verify database user privileges.", catalog);
                 }
             } else {
                 log.info("CAMPUSFIX DB INIT: Database schema verified. Table 'users' is ready.");

@@ -3,6 +3,8 @@ package com.anurag.campusfix.controller;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +53,27 @@ public class HealthController {
             response.setDatabase("connected");
             String catalog = connection.getCatalog();
             response.setCatalog(catalog);
+
+            try {
+                String rawUrl = connection.getMetaData().getURL();
+                if (rawUrl != null) {
+                    response.setJdbcUrl(rawUrl.replaceAll("://([^:]+):([^@]+)@", "://$1:***@")
+                                              .replaceAll("(?i)(password=)[^;&]*", "$1***"));
+                }
+            } catch (Exception ignored) {
+            }
+
+            // List available databases on this MySQL server
+            try (Statement stmt = connection.createStatement();
+                 ResultSet rs = stmt.executeQuery("SHOW DATABASES")) {
+                List<String> dbs = new ArrayList<>();
+                while (rs.next()) {
+                    dbs.add(rs.getString(1));
+                }
+                response.setAvailableDatabases(dbs);
+            } catch (Exception showEx) {
+                log.debug("SHOW DATABASES notice: {}", showEx.getMessage());
+            }
 
             // Verify table readability
             try (Statement stmt = connection.createStatement();
