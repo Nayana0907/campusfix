@@ -55,6 +55,8 @@ public class UserConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(
+                    "/",
+                    "/error",
                     "/api/auth/register",
                     "/api/auth/login",
                     "/api/auth/refresh",

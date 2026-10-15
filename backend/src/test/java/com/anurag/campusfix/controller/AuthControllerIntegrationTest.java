@@ -409,4 +409,13 @@ class AuthControllerIntegrationTest {
         org.junit.jupiter.api.Assertions.assertFalse(maskedJdbc.contains("mySecretPassword"));
         org.junit.jupiter.api.Assertions.assertTrue(maskedJdbc.contains("password=***"));
     }
+
+    @Test
+    @DisplayName("GET / should return 200 OK with API status")
+    void testRootEndpointIsPublic() throws Exception {
+        mockMvc.perform(get("/"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.service").value("CampusFix Backend API"));
+    }
 }
